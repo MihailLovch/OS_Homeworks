@@ -10,7 +10,7 @@ def my_fork():
         print(f'Parent[{os.getpid()}]: I ran children process with PID {child}.')
     else:
         rand = random.randint(5,10)
-        os.execl('./child.py', './child.py', str(rand))
+        os.execl('child.py', 'child.py', str(rand))
     return child
 
 n = int(sys.argv[1])

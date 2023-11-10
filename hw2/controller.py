@@ -1,0 +1,62 @@
+import os
+import signal
+import select
+
+produced = 0
+
+
+def signal_handler(signum, frame):
+    global produced
+    if signum == signal.SIGUSR1:
+        print(f"Produced: {produced}")
+
+
+def main():
+    global produced
+
+    signal.signal(signal.SIGUSR1, signal_handler)
+
+    pipe1_0, pipe0_2, pipe2_0 = os.pipe(), os.pipe(), os.pipe()
+
+    process1 = os.fork()
+
+    if process1 == 0:
+        os.close(pipe1_0[0])
+        os.dup2(pipe1_0[1], 1)
+        os.execl("./producer.py", "./producer.py")
+    else:
+        os.close(pipe1_0[1])
+        process2 = os.fork()
+
+        if process2 == 0:
+            os.close(pipe0_2[1])
+            os.close(pipe2_0[0])
+            os.dup2(pipe0_2[0], 0)
+            os.dup2(pipe2_0[1], 1)
+            os.execl("/usr/bin/bc", "bc")
+
+        else:
+            results = []
+
+            os.close(pipe0_2[0])
+            os.close(pipe2_0[1])
+
+            while True:
+                res_list, _, _ = select.select([pipe1_0[0]], [], [], 1)
+                if res_list:
+                    expression = os.read(pipe1_0[0], 100).decode("utf-8").strip()
+                    if not expression:
+                        break
+
+                    os.write(pipe0_2[1], expression.encode("utf-8") + b"\n")
+                    produced += 1
+                    result = os.read(pipe2_0[0], 100).decode("utf-8").strip()
+                    results.append((expression, result))
+
+                for expression, result in results:
+                    print(f"{expression} = {result}")
+                results = []
+
+
+if __name__ == "__main__":
+    main()
